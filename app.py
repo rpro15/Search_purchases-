@@ -73,13 +73,26 @@ with st.sidebar:
 
     st.subheader("Отправка по e-mail (опционально)")
     email_recipient = st.text_input("Получатель (e-mail)", value="")
-    smtp_login = st.text_input("SMTP логин (mail.ru)", value="")
-    smtp_password = st.text_input(
-        "SMTP пароль",
-        value="",
-        type="password",
-        help="Используйте пароль приложения. Данные не сохраняются.",
+    email_mode = st.radio(
+        "Режим отправки",
+        options=["mailto", "smtp"],
+        format_func=lambda m: "📬 Открыть почтовый клиент (без пароля)"
+        if m == "mailto"
+        else "📤 SMTP (mail.ru, с паролем)",
+        index=0,
+        help="mailto — создаёт ссылку для вашего почтового клиента. "
+        "SMTP — отправляет письмо с вложением автоматически.",
     )
+    smtp_login = ""
+    smtp_password = ""
+    if email_mode == "smtp":
+        smtp_login = st.text_input("SMTP логин (mail.ru)", value="")
+        smtp_password = st.text_input(
+            "SMTP пароль",
+            value="",
+            type="password",
+            help="Используйте пароль приложения. Данные не сохраняются.",
+        )
 
 # ---------------------------------------------------------------------------
 # Main area — run search
@@ -101,6 +114,7 @@ if run_clicked and query:
         ai_ranking=ai_ranking,
         ai_threshold=float(ai_threshold),
         email_recipient=email_recipient,
+        email_mode=email_mode,
         smtp_login=smtp_login,
         smtp_password=smtp_password,
     )
@@ -156,30 +170,60 @@ if "results" in st.session_state:
         # ----------------------------------------------------------------
         # E-mail sending
         # ----------------------------------------------------------------
-        email_fields_filled = all(
-            [settings.email_recipient, settings.smtp_login, settings.smtp_password]
-        )
+        if settings.email_recipient:
+            if settings.email_mode == "mailto":
+                import urllib.parse
 
-        if email_fields_filled:
-            if st.button("📧 Отправить по e-mail"):
-                try:
-                    send_email(
-                        recipient=settings.email_recipient,
-                        subject=f"Результаты поиска закупок: {settings.query}",
-                        body=(
-                            f"Поисковый запрос: {settings.query}\n"
-                            f"Регион: {settings.region}\n"
-                            f"Записей: {len(combined)}\n"
-                        ),
-                        attachment_bytes=xlsx_bytes,
-                        attachment_filename="results.xlsx",
-                        smtp_login=settings.smtp_login,
-                        smtp_password=settings.smtp_password,
+                subject = urllib.parse.quote(
+                    f"Результаты поиска закупок: {settings.query}"
+                )
+                body = urllib.parse.quote(
+                    f"Поисковый запрос: {settings.query}\n"
+                    f"Регион: {settings.region}\n"
+                    f"Записей: {len(combined)}\n\n"
+                    "Файл results.xlsx прикреплён вручную."
+                )
+                mailto_url = (
+                    f"mailto:{settings.email_recipient}"
+                    f"?subject={subject}&body={body}"
+                )
+                st.markdown(
+                    f'<a href="{mailto_url}" target="_blank">'
+                    "📬 Открыть письмо в почтовом клиенте</a>",
+                    unsafe_allow_html=True,
+                )
+                st.caption(
+                    "Скачайте Excel-файл выше и прикрепите его к письму вручную. "
+                    "Автоматическое прикрепление через mailto: не поддерживается браузерами."
+                )
+            else:
+                email_fields_filled = all(
+                    [settings.smtp_login, settings.smtp_password]
+                )
+                if email_fields_filled:
+                    if st.button("📧 Отправить по e-mail (SMTP)"):
+                        try:
+                            send_email(
+                                recipient=settings.email_recipient,
+                                subject=f"Результаты поиска закупок: {settings.query}",
+                                body=(
+                                    f"Поисковый запрос: {settings.query}\n"
+                                    f"Регион: {settings.region}\n"
+                                    f"Записей: {len(combined)}\n"
+                                ),
+                                attachment_bytes=xlsx_bytes,
+                                attachment_filename="results.xlsx",
+                                smtp_login=settings.smtp_login,
+                                smtp_password=settings.smtp_password,
+                            )
+                            st.success("Письмо успешно отправлено!")
+                        except Exception as exc:
+                            st.error(f"Ошибка отправки: {exc}")
+                else:
+                    st.caption(
+                        "Заполните SMTP логин и пароль в боковой панели для отправки."
                     )
-                    st.success("Письмо успешно отправлено!")
-                except Exception as exc:
-                    st.error(f"Ошибка отправки: {exc}")
         else:
             st.caption(
-                "Заполните поля SMTP в боковой панели для отправки результатов по e-mail."
+                "Укажите e-mail получателя в боковой панели для отправки результатов."
             )

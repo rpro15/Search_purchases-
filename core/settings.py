@@ -21,5 +21,6 @@ class SearchSettings:
 
     # E-mail delivery (optional)
     email_recipient: str = ""
+    email_mode: str = "mailto"  # "mailto" | "smtp"
     smtp_login: str = ""
     smtp_password: str = ""
