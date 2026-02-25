@@ -82,20 +82,20 @@ core/
 
 ## Дорожная карта (Roadmap)
 
-- [ ] **Playwright-скрапинг docSearch**
+- [x] **Playwright-скрапинг docSearch**
   - Открыть `https://zakupki.gov.ru/epz/order/docSearch/results.html`
   - Выбрать регион через модальное окно «Мой регион» → «Ваш субъект РФ» → Сохранить
   - Ввести запрос, перебрать страницы до `limit` записей
   - Вернуть DataFrame (`purchase_number`, `title`, `url`, `price`, `publish_date`, `source`)
 
-- [ ] **Playwright-скрапинг extendedsearch**
+- [x] **Playwright-скрапинг extendedsearch**
   - Аналогично для `https://zakupki.gov.ru/epz/order/extendedsearch/results.html`
 
-- [ ] **Фильтрация по дате** — передавать `date_from` / `date_to` в запросы
+- [x] **Фильтрация по дате** — передавать `date_from` / `date_to` в запросы
 
 - [ ] **AI-ранжирование** — реализовать `score_results` в `core/ai_ranker.py`
   с использованием `sentence-transformers` (модель `paraphrase-multilingual-MiniLM-L12-v2`)
 
-- [ ] **Автоматический выбор региона** — Playwright-взаимодействие с полем «Ваш субъект РФ»
+- [x] **Автоматический выбор региона** — Playwright-взаимодействие с полем «Ваш субъект РФ»
 
-- [ ] **Тесты** — покрыть `merge.py`, `export_excel.py`, `ai_ranker.py`
+- [x] **Тесты** — покрыть `merge.py`, `export_excel.py`, `ai_ranker.py`
