@@ -7,7 +7,7 @@ import streamlit as st
 
 from core.ai_ranker import score_results
 from core.email_mailru import send_email
-from core.export_excel import to_excel_bytes
+from core.export_excel import to_csv_bytes, to_excel_bytes, to_json_bytes, to_txt_bytes
 from core.merge import merge_results
 from core.settings import SearchSettings
 from core.sources.docsearch import search_docsearch
@@ -24,6 +24,98 @@ st.set_page_config(
 
 st.title("🔍 Поиск закупок на zakupki.gov.ru")
 
+REGIONS_RU = [
+    "Республика Адыгея",
+    "Республика Алтай",
+    "Республика Башкортостан",
+    "Республика Бурятия",
+    "Республика Дагестан",
+    "Республика Ингушетия",
+    "Кабардино-Балкарская Республика",
+    "Республика Калмыкия",
+    "Карачаево-Черкесская Республика",
+    "Республика Карелия",
+    "Республика Коми",
+    "Республика Крым",
+    "Республика Марий Эл",
+    "Республика Мордовия",
+    "Республика Саха (Якутия)",
+    "Республика Северная Осетия — Алания",
+    "Республика Татарстан",
+    "Республика Тыва",
+    "Удмуртская Республика",
+    "Республика Хакасия",
+    "Чеченская Республика",
+    "Чувашская Республика",
+    "Алтайский край",
+    "Забайкальский край",
+    "Камчатский край",
+    "Краснодарский край",
+    "Красноярский край",
+    "Пермский край",
+    "Приморский край",
+    "Ставропольский край",
+    "Хабаровский край",
+    "Амурская область",
+    "Архангельская область",
+    "Астраханская область",
+    "Белгородская область",
+    "Брянская область",
+    "Владимирская область",
+    "Волгоградская область",
+    "Вологодская область",
+    "Воронежская область",
+    "Ивановская область",
+    "Иркутская область",
+    "Калининградская область",
+    "Калужская область",
+    "Кемеровская область — Кузбасс",
+    "Кировская область",
+    "Костромская область",
+    "Курганская область",
+    "Курская область",
+    "Ленинградская область",
+    "Липецкая область",
+    "Магаданская область",
+    "Московская область",
+    "Мурманская область",
+    "Нижегородская область",
+    "Новгородская область",
+    "Новосибирская область",
+    "Омская область",
+    "Оренбургская область",
+    "Орловская область",
+    "Пензенская область",
+    "Псковская область",
+    "Ростовская область",
+    "Рязанская область",
+    "Самарская область",
+    "Саратовская область",
+    "Сахалинская область",
+    "Свердловская область",
+    "Смоленская область",
+    "Тамбовская область",
+    "Тверская область",
+    "Томская область",
+    "Тульская область",
+    "Тюменская область",
+    "Ульяновская область",
+    "Челябинская область",
+    "Ярославская область",
+    "Москва",
+    "Санкт-Петербург",
+    "Севастополь",
+    "Еврейская автономная область",
+    "Ненецкий автономный округ",
+    "Ханты-Мансийский автономный округ — Югра",
+    "Чукотский автономный округ",
+    "Ямало-Ненецкий автономный округ",
+    "Донецкая Народная Республика",
+    "Луганская Народная Республика",
+    "Запорожская область",
+    "Херсонская область",
+]
+
 # ---------------------------------------------------------------------------
 # Sidebar — search parameters
 # ---------------------------------------------------------------------------
@@ -32,12 +124,16 @@ with st.sidebar:
 
     query = st.text_input("Поисковый запрос", value="")
 
-    region = st.text_input(
+    selected_region = st.selectbox(
         "Регион",
-        value="г Москва",
-        help="Введите регион в текстовом виде. "
-        "TODO: автоматический выбор через Playwright (модальное окно «Мой регион»).",
+        options=REGIONS_RU,
+        index=REGIONS_RU.index("Москва"),
+        help="Выберите регион из полного списка, как на сайте закупок.",
     )
+    custom_region_enabled = st.checkbox("Ввести регион вручную", value=False)
+    region = selected_region
+    if custom_region_enabled:
+        region = st.text_input("Регион (ручной ввод)", value=selected_region)
 
     st.subheader("Диапазон дат")
     date_from = st.date_input(
@@ -61,6 +157,25 @@ with st.sidebar:
 
     st.subheader("AI-ранжирование (опционально)")
     ai_ranking = st.checkbox("Включить AI-ранжирование", value=False)
+    ai_mode_label = st.selectbox(
+        "Режим AI",
+        options=["Быстро", "Баланс", "Качество"],
+        index=1,
+        disabled=not ai_ranking,
+        help="Быстро: MiniLM, Баланс: multilingual-e5-base, Качество: bge-m3.",
+    )
+    ai_mode_map = {
+        "Быстро": "fast",
+        "Баланс": "balanced",
+        "Качество": "quality",
+    }
+    ai_mode = ai_mode_map[ai_mode_label]
+    ai_allow_download = st.checkbox(
+        "Разрешить загрузку AI-модели из интернета",
+        value=False,
+        disabled=not ai_ranking,
+        help="Если выключено, используется только локальный кэш модели и быстрый fallback.",
+    )
     ai_threshold = st.slider(
         "Порог релевантности",
         min_value=0.0,
@@ -68,7 +183,7 @@ with st.sidebar:
         value=0.5,
         step=0.05,
         disabled=not ai_ranking,
-        help="TODO: будет использоваться sentence-transformers для расчёта схожести.",
+        help="Отсекает результаты с низкой релевантностью.",
     )
 
     st.subheader("Отправка по e-mail (опционально)")
@@ -113,6 +228,8 @@ if run_clicked and query:
         limit=int(limit),
         ai_ranking=ai_ranking,
         ai_threshold=float(ai_threshold),
+        ai_mode=ai_mode,
+        ai_allow_download=ai_allow_download,
         email_recipient=email_recipient,
         email_mode=email_mode,
         smtp_login=smtp_login,
@@ -120,15 +237,22 @@ if run_clicked and query:
     )
 
     results_dfs: list[pd.DataFrame] = []
+    search_errors: list[str] = []
 
     with st.spinner("Выполняется поиск…"):
         if settings.doc_search:
-            df_doc = search_docsearch(settings)
-            results_dfs.append(df_doc)
+            try:
+                df_doc = search_docsearch(settings)
+                results_dfs.append(df_doc)
+            except Exception as exc:
+                search_errors.append(f"docSearch: {exc}")
 
         if settings.extended_search:
-            df_orders = search_orders(settings)
-            results_dfs.append(df_orders)
+            try:
+                df_orders = search_orders(settings)
+                results_dfs.append(df_orders)
+            except Exception as exc:
+                search_errors.append(f"extendedsearch: {exc}")
 
     combined = merge_results(results_dfs)
 
@@ -138,10 +262,14 @@ if run_clicked and query:
                 combined,
                 query=settings.query,
                 threshold=settings.ai_threshold,
+                mode=settings.ai_mode,
+                model_name=settings.ai_model or None,
+                allow_model_download=settings.ai_allow_download,
             )
 
     st.session_state["results"] = combined
     st.session_state["settings"] = settings
+    st.session_state["search_errors"] = search_errors
 
 # ---------------------------------------------------------------------------
 # Display results
@@ -149,22 +277,60 @@ if run_clicked and query:
 if "results" in st.session_state:
     combined: pd.DataFrame = st.session_state["results"]
     settings: SearchSettings = st.session_state["settings"]
+    search_errors: list[str] = st.session_state.get("search_errors", [])
+
+    for err in search_errors:
+        st.error(f"Ошибка источника: {err}")
 
     if combined.empty:
         st.warning("Результаты не найдены.")
     else:
         st.success(f"Найдено записей: {len(combined)}")
-        st.dataframe(combined, use_container_width=True)
+        st.data_editor(
+            combined,
+            use_container_width=True,
+            hide_index=True,
+            disabled=True,
+            column_config={
+                "url": st.column_config.LinkColumn(
+                    "Ссылка на закупку",
+                    display_text="Открыть",
+                    help="Нажмите, чтобы открыть закупку на zakupki.gov.ru",
+                )
+            },
+        )
 
         # ----------------------------------------------------------------
-        # Excel download
+        # File download
         # ----------------------------------------------------------------
         xlsx_bytes = to_excel_bytes(combined)
+        csv_bytes = to_csv_bytes(combined)
+        txt_bytes = to_txt_bytes(combined)
+        json_bytes = to_json_bytes(combined)
+
         st.download_button(
             label="⬇ Скачать Excel",
             data=xlsx_bytes,
             file_name="results.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        st.download_button(
+            label="⬇ Скачать CSV",
+            data=csv_bytes,
+            file_name="results.csv",
+            mime="text/csv",
+        )
+        st.download_button(
+            label="⬇ Скачать TXT",
+            data=txt_bytes,
+            file_name="results.txt",
+            mime="text/plain",
+        )
+        st.download_button(
+            label="⬇ Скачать JSON",
+            data=json_bytes,
+            file_name="results.json",
+            mime="application/json",
         )
 
         # ----------------------------------------------------------------

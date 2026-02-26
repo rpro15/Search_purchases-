@@ -1,6 +1,6 @@
 """Runtime configuration dataclasses for the search application."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date
 from typing import Optional
 
@@ -18,6 +18,9 @@ class SearchSettings:
     limit: int = 50
     ai_ranking: bool = False
     ai_threshold: float = 0.5
+    ai_mode: str = "balanced"  # "fast" | "balanced" | "quality"
+    ai_model: str = ""
+    ai_allow_download: bool = False
 
     # E-mail delivery (optional)
     email_recipient: str = ""
